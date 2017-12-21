@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/google/zoekt"
@@ -122,6 +123,8 @@ func dumpAPIOutput(w http.ResponseWriter, rep interface{}) error {
 }
 
 func serveSearchAPIStructured(searcher zoekt.Searcher, req *SearchRequest) (*SearchResponse, error) {
+	log.Printf("api/search query=%q restrictions=%d", req.Query, len(req.Restrict))
+
 	q, err := query.Parse(req.Query)
 	if err != nil {
 		msg := "parse error: " + err.Error()
@@ -194,6 +197,8 @@ func serveSearchAPIStructured(searcher zoekt.Searcher, req *SearchRequest) (*Sea
 }
 
 func serveListAPIStructured(searcher zoekt.Searcher, req *ListRequest) (*ListResponse, error) {
+	log.Printf("api/list restrictions=%d", len(req.Restrict))
+
 	restrictions := make([]query.Q, len(req.Restrict))
 	for i, r := range req.Restrict {
 		restrictions[i] = &query.Repo{r.Repo}
