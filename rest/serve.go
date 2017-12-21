@@ -43,6 +43,15 @@ func Search(s zoekt.Searcher, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func List(s zoekt.Searcher, w http.ResponseWriter, r *http.Request) {
+	if err := serveListAPIErr(s, w, r); err != nil {
+		if e, ok := err.(*httpError); ok {
+			http.Error(w, e.msg, e.status)
+		}
+		http.Error(w, err.Error(), http.StatusTeapot)
+	}
+}
+
 func verifyAPIInput(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 	if r.Method != http.MethodPost {
 		return nil, &httpError{"must use POST", http.StatusMethodNotAllowed}
@@ -73,6 +82,25 @@ func serveSearchAPIErr(s zoekt.Searcher, w http.ResponseWriter, r *http.Request)
 	}
 
 	rep, err := serveSearchAPIStructured(s, &req)
+	if err != nil {
+		return err
+	}
+
+	return dumpAPIOutput(w, rep)
+}
+
+func serveListAPIErr(s zoekt.Searcher, w http.ResponseWriter, r *http.Request) error {
+	content, err := verifyAPIInput(w, r)
+	if err != nil {
+		return err
+	}
+
+	var req ListRequest
+	if err := json.Unmarshal(content, &req); err != nil {
+		return &httpError{err.Error(), http.StatusBadRequest}
+	}
+
+	rep, err := serveListAPIStructured(s, &req)
 	if err != nil {
 		return err
 	}
@@ -160,6 +188,37 @@ func serveSearchAPIStructured(searcher zoekt.Searcher, req *SearchRequest) (*Sea
 			srf.Lines = append(srf.Lines, srl)
 		}
 		resp.Files = append(resp.Files, &srf)
+	}
+
+	return &resp, nil
+}
+
+func serveListAPIStructured(searcher zoekt.Searcher, req *ListRequest) (*ListResponse, error) {
+	restrictions := make([]query.Q, len(req.Restrict))
+	for i, r := range req.Restrict {
+		restrictions[i] = &query.Repo{r.Repo}
+	}
+
+	finalQ := query.NewOr(restrictions...)
+
+	ctx := context.Background()
+	result, err := searcher.List(ctx, finalQ)
+	if err != nil {
+		return nil, &httpError{err.Error(), http.StatusInternalServerError}
+	}
+
+	var resp ListResponse
+	for _, r := range result.Repos {
+		lrr := ListResponseRepo{
+			Name: r.Repository.Name,
+		}
+		for _, b := range r.Repository.Branches {
+			lrr.Branches = append(lrr.Branches, ListResponseBranch{
+				Name:    b.Name,
+				Version: b.Version,
+			})
+		}
+		resp.Repos = append(resp.Repos, &lrr)
 	}
 
 	return &resp, nil
