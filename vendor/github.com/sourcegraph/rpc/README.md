@@ -1,4 +1,4 @@
-# rpc
+# rpc [![Build Status](https://travis-ci.org/sourcegraph/rpc.svg?branch=master)](http://travis-ci.org/sourcegraph/rpc)
 
 This is a fork of the stdlib [net/rpc](https://golang.org/pkg/net/rpc/) which
 is frozen. It adds support for `context.Context` on the client and server,

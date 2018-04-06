@@ -20,8 +20,8 @@
   name = "github.com/kylelemons/godebug"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/sourcegraph/rpc"
-  version = "1.0.1"
 
 [[constraint]]
   branch = "master"

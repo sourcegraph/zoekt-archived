@@ -57,12 +57,6 @@
   revision = "d14ea06fba99483203c19d92cfcd13ebe73135f4"
 
 [[projects]]
-  name = "github.com/keegancsmith/rpc"
-  packages = ["internal/svc"]
-  revision = "e57ba2c39bf5f13f3bb5747a5a381f6e26d16d4a"
-  version = "v1.0.1"
-
-[[projects]]
   name = "github.com/kevinburke/ssh_config"
   packages = ["."]
   revision = "9fc7bb800b555d63157c65a904c86a2cc7b4e795"
@@ -96,10 +90,13 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/sourcegraph/rpc"
-  packages = ["."]
-  revision = "e57ba2c39bf5f13f3bb5747a5a381f6e26d16d4a"
-  version = "v1.0.1"
+  packages = [
+    ".",
+    "internal/svc"
+  ]
+  revision = "5eaf49b36f8558bf8be72ffbef31edcadd554e07"
 
 [[projects]]
   name = "github.com/src-d/gcfg"
@@ -270,6 +267,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2c1ee0e9db3f1bdff4928a951f6839d70ce1d95ff409a8a84591b2aa3c4c102b"
+  inputs-digest = "f7df3cdc1d22434f56b4a91cd841d3ba75f25e725ec9c543ec4842e31a01a830"
   solver-name = "gps-cdcl"
   solver-version = 1
