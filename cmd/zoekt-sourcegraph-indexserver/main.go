@@ -42,7 +42,6 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 
 	t := time.NewTicker(interval)
 	for {
-		listRepos(root)
 		repos, err := listRepos(root)
 		if err != nil {
 			log.Println(err)
