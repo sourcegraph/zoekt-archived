@@ -1,4 +1,4 @@
-// zoekt-archive-index indexes an archive.
+// Command zoekt-archive-index indexes an archive.
 //
 // Example via github.com:
 //
