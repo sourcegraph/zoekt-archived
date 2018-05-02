@@ -61,37 +61,7 @@ func (s *Server) Refresh() {
 		}
 
 		for _, name := range repos {
-			tr := trace.New("index", name)
-
-			commit, err := resolveRevision(s.Root, name, "HEAD")
-			if err != nil || commit == "" {
-				if os.IsNotExist(err) {
-					// If we get to this point, it means we have an empty
-					// repository (ie we know it exists). As such, we just
-					// create an empty shard.
-					tr.LazyPrintf("empty repository")
-					s.createEmptyShard(tr, name)
-					tr.Finish()
-					continue
-				}
-				log.Printf("failed to resolve revision HEAD for %v: %v", name, err)
-				tr.LazyPrintf("%v", err)
-				tr.Finish()
-				continue
-			}
-
-			cmd := exec.Command("zoekt-archive-index",
-				fmt.Sprintf("-parallelism=%d", s.CPUCount),
-				"-index", s.IndexDir,
-				"-incremental",
-				"-branch", "HEAD",
-				"-commit", commit,
-				"-name", name,
-				tarballURL(s.Root, name, commit))
-			// Prevent prompting
-			cmd.Stdin = &bytes.Buffer{}
-			s.loggedRun(tr, cmd)
-			tr.Finish()
+			s.index(name)
 		}
 
 		if len(repos) == 0 {
@@ -107,6 +77,38 @@ func (s *Server) Refresh() {
 
 		<-t.C
 	}
+}
+
+func (s *Server) index(name string) {
+	tr := trace.New("index", name)
+	defer tr.Finish()
+
+	commit, err := resolveRevision(s.Root, name, "HEAD")
+	if err != nil || commit == "" {
+		if os.IsNotExist(err) {
+			// If we get to this point, it means we have an empty
+			// repository (ie we know it exists). As such, we just
+			// create an empty shard.
+			tr.LazyPrintf("empty repository")
+			s.createEmptyShard(tr, name)
+			return
+		}
+		log.Printf("failed to resolve revision HEAD for %v: %v", name, err)
+		tr.LazyPrintf("%v", err)
+		return
+	}
+
+	cmd := exec.Command("zoekt-archive-index",
+		fmt.Sprintf("-parallelism=%d", s.CPUCount),
+		"-index", s.IndexDir,
+		"-incremental",
+		"-branch", "HEAD",
+		"-commit", commit,
+		"-name", name,
+		tarballURL(s.Root, name, commit))
+	// Prevent prompting
+	cmd.Stdin = &bytes.Buffer{}
+	s.loggedRun(tr, cmd)
 }
 
 func (s *Server) createEmptyShard(tr trace.Trace, name string) {
