@@ -64,6 +64,7 @@ func (s *Server) Refresh() {
 			continue
 		}
 
+		log.Printf("indexing %d repositories", len(repos))
 		for _, name := range repos {
 			s.index(name)
 		}
