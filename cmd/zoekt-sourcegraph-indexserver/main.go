@@ -22,12 +22,25 @@ import (
 	"github.com/google/zoekt/build"
 )
 
+// Server is the main functionality of zoekt-sourcegraph-indexserver. It
+// exists to conveniently use all the options passed in via func main.
 type Server struct {
-	Root     *url.URL
+	// Root is the base URL for the Sourcegraph instance to index. Normally
+	// http://sourcegraph-frontend-internal or http://localhost:3090.
+	Root *url.URL
+
+	// IndexDir is the index directory to use.
 	IndexDir string
+
+	// Interval is how often we sync with Sourcegraph.
 	Interval time.Duration
+
+	// CPUCount is the amount of parallelism to use when indexing a
+	// repository.
 	CPUCount int
-	Debug    bool
+
+	// Debug when true will output extra debug logs.
+	Debug bool
 }
 
 func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) {
@@ -54,6 +67,7 @@ func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) {
 	}
 }
 
+// Refresh is starts the sync loop. It blocks forever.
 func (s *Server) Refresh() {
 	t := time.NewTicker(s.Interval)
 	for {
