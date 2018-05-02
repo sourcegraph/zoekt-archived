@@ -16,21 +16,30 @@ import (
 	"runtime"
 	"time"
 
+	"golang.org/x/net/trace"
+
 	"github.com/google/zoekt"
 	"github.com/google/zoekt/build"
 )
 
-func loggedRun(cmd *exec.Cmd) {
+func loggedRun(tr trace.Trace, cmd *exec.Cmd) {
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	cmd.Stdout = out
 	cmd.Stderr = errOut
 
+	tr.LazyPrintf("%s", cmd.Args)
 	if err := cmd.Run(); err != nil {
+		outS := out.String()
+		errS := errOut.String()
+		tr.LazyPrintf("failed: %v", err)
+		tr.LazyPrintf("stdout: %s", outS)
+		tr.LazyPrintf("stderr: %s", errS)
+		tr.SetError()
 		log.Printf("command %s failed: %v\nOUT: %s\nERR: %s",
-			cmd.Args, err, out.String(), errOut.String())
+			cmd.Args, err, outS, errS)
 	} else {
-		log.Printf("ran successfully %s", cmd.Args)
+		tr.LazyPrintf("success")
 	}
 }
 
@@ -50,16 +59,22 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 		}
 
 		for _, name := range repos {
+			tr := trace.New("index", name)
+
 			commit, err := resolveRevision(root, name, "HEAD")
 			if err != nil || commit == "" {
 				if os.IsNotExist(err) {
 					// If we get to this point, it means we have an empty
 					// repository (ie we know it exists). As such, we just
 					// create an empty shard.
-					createEmptyShard(indexDir, name)
+					tr.LazyPrintf("empty repository")
+					createEmptyShard(tr, indexDir, name)
+					tr.Finish()
 					continue
 				}
 				log.Printf("failed to resolve revision HEAD for %v: %v", name, err)
+				tr.LazyPrintf("%v", err)
+				tr.Finish()
 				continue
 			}
 
@@ -73,7 +88,8 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 				tarballURL(root, name, commit))
 			// Prevent prompting
 			cmd.Stdin = &bytes.Buffer{}
-			loggedRun(cmd)
+			loggedRun(tr, cmd)
+			tr.Finish()
 		}
 
 		if len(repos) == 0 {
@@ -91,7 +107,7 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 	}
 }
 
-func createEmptyShard(indexDir, name string) {
+func createEmptyShard(tr trace.Trace, indexDir, name string) {
 	cmd := exec.Command("zoekt-archive-index",
 		"-index", indexDir,
 		"-incremental",
@@ -101,7 +117,7 @@ func createEmptyShard(indexDir, name string) {
 		"-")
 	// Empty archive
 	cmd.Stdin = bytes.NewBuffer(bytes.Repeat([]byte{0}, 1024))
-	loggedRun(cmd)
+	loggedRun(tr, cmd)
 }
 
 func listRepos(root *url.URL) ([]string, error) {
@@ -204,6 +220,7 @@ func main() {
 	root := flag.String("sourcegraph_url", "", "http://sourcegraph-frontend-internal or http://localhost:3090")
 	interval := flag.Duration("interval", 10*time.Minute, "sync with sourcegraph this often")
 	index := flag.String("index", build.DefaultDir, "set index directory to use")
+	listen := flag.String("listen", "", "listen on this address.")
 	cpuFraction := flag.Float64("cpu_fraction", 0.25,
 		"use this fraction of the cores for indexing.")
 	flag.Parse()
@@ -232,6 +249,16 @@ func main() {
 		if err := os.MkdirAll(*index, 0755); err != nil {
 			log.Fatalf("MkdirAll %s: %v", *index, err)
 		}
+	}
+
+	if *listen != "" {
+		go func() {
+			trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
+				return true, true
+			}
+			log.Printf("serving HTTP on %s", *listen)
+			log.Fatal(http.ListenAndServe(*listen, http.HandlerFunc(trace.Traces)))
+		}()
 	}
 
 	refresh(rootURL, *index, *interval, *cpuFraction)
