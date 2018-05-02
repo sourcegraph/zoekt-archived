@@ -22,7 +22,14 @@ import (
 	"github.com/google/zoekt/build"
 )
 
-func loggedRun(tr trace.Trace, cmd *exec.Cmd) {
+type Server struct {
+	Root     *url.URL
+	IndexDir string
+	Interval time.Duration
+	CPUCount int
+}
+
+func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) {
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	cmd.Stdout = out
@@ -43,15 +50,10 @@ func loggedRun(tr trace.Trace, cmd *exec.Cmd) {
 	}
 }
 
-func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction float64) {
-	cpuCount := int(math.Round(float64(runtime.NumCPU()) * cpuFraction))
-	if cpuCount < 1 {
-		cpuCount = 1
-	}
-
-	t := time.NewTicker(interval)
+func (s *Server) Refresh() {
+	t := time.NewTicker(s.Interval)
 	for {
-		repos, err := listRepos(root)
+		repos, err := listRepos(s.Root)
 		if err != nil {
 			log.Println(err)
 			<-t.C
@@ -61,14 +63,14 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 		for _, name := range repos {
 			tr := trace.New("index", name)
 
-			commit, err := resolveRevision(root, name, "HEAD")
+			commit, err := resolveRevision(s.Root, name, "HEAD")
 			if err != nil || commit == "" {
 				if os.IsNotExist(err) {
 					// If we get to this point, it means we have an empty
 					// repository (ie we know it exists). As such, we just
 					// create an empty shard.
 					tr.LazyPrintf("empty repository")
-					createEmptyShard(tr, indexDir, name)
+					s.createEmptyShard(tr, name)
 					tr.Finish()
 					continue
 				}
@@ -79,16 +81,16 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 			}
 
 			cmd := exec.Command("zoekt-archive-index",
-				fmt.Sprintf("-parallelism=%d", cpuCount),
-				"-index", indexDir,
+				fmt.Sprintf("-parallelism=%d", s.CPUCount),
+				"-index", s.IndexDir,
 				"-incremental",
 				"-branch", "HEAD",
 				"-commit", commit,
 				"-name", name,
-				tarballURL(root, name, commit))
+				tarballURL(s.Root, name, commit))
 			// Prevent prompting
 			cmd.Stdin = &bytes.Buffer{}
-			loggedRun(tr, cmd)
+			s.loggedRun(tr, cmd)
 			tr.Finish()
 		}
 
@@ -100,16 +102,16 @@ func refresh(root *url.URL, indexDir string, interval time.Duration, cpuFraction
 			for _, name := range repos {
 				exists[name] = true
 			}
-			deleteStaleIndexes(indexDir, exists)
+			s.deleteStaleIndexes(exists)
 		}
 
 		<-t.C
 	}
 }
 
-func createEmptyShard(tr trace.Trace, indexDir, name string) {
+func (s *Server) createEmptyShard(tr trace.Trace, name string) {
 	cmd := exec.Command("zoekt-archive-index",
-		"-index", indexDir,
+		"-index", s.IndexDir,
 		"-incremental",
 		"-branch", "HEAD",
 		"-commit", "404aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -117,7 +119,21 @@ func createEmptyShard(tr trace.Trace, indexDir, name string) {
 		"-")
 	// Empty archive
 	cmd.Stdin = bytes.NewBuffer(bytes.Repeat([]byte{0}, 1024))
-	loggedRun(tr, cmd)
+	s.loggedRun(tr, cmd)
+}
+
+func (s *Server) deleteStaleIndexes(exists map[string]bool) {
+	expr := s.IndexDir + "/*"
+	fs, err := filepath.Glob(expr)
+	if err != nil {
+		log.Printf("Glob(%q): %v", expr, err)
+	}
+
+	for _, f := range fs {
+		if err := deleteIfStale(exists, f); err != nil {
+			log.Printf("deleteIfStale(%q): %v", f, err)
+		}
+	}
 }
 
 func listRepos(root *url.URL) ([]string, error) {
@@ -202,20 +218,6 @@ func deleteIfStale(exists map[string]bool, fn string) error {
 	return nil
 }
 
-func deleteStaleIndexes(indexDir string, exists map[string]bool) {
-	expr := indexDir + "/*"
-	fs, err := filepath.Glob(expr)
-	if err != nil {
-		log.Printf("Glob(%q): %v", expr, err)
-	}
-
-	for _, f := range fs {
-		if err := deleteIfStale(exists, f); err != nil {
-			log.Printf("deleteIfStale(%q): %v", f, err)
-		}
-	}
-}
-
 func main() {
 	root := flag.String("sourcegraph_url", "", "http://sourcegraph-frontend-internal or http://localhost:3090")
 	interval := flag.Duration("interval", 10*time.Minute, "sync with sourcegraph this often")
@@ -251,6 +253,17 @@ func main() {
 		}
 	}
 
+	cpuCount := int(math.Round(float64(runtime.NumCPU()) * (*cpuFraction)))
+	if cpuCount < 1 {
+		cpuCount = 1
+	}
+	s := &Server{
+		Root:     rootURL,
+		IndexDir: *index,
+		Interval: *interval,
+		CPUCount: cpuCount,
+	}
+
 	if *listen != "" {
 		go func() {
 			trace.AuthRequest = func(req *http.Request) (any, sensitive bool) {
@@ -261,5 +274,5 @@ func main() {
 		}()
 	}
 
-	refresh(rootURL, *index, *interval, *cpuFraction)
+	s.Refresh()
 }
