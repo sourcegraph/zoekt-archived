@@ -27,6 +27,7 @@ type Server struct {
 	IndexDir string
 	Interval time.Duration
 	CPUCount int
+	Debug    bool
 }
 
 func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) {
@@ -47,6 +48,9 @@ func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) {
 			cmd.Args, err, outS, errS)
 	} else {
 		tr.LazyPrintf("success")
+		if s.Debug {
+			log.Printf("ran successfully %s", cmd.Args)
+		}
 	}
 }
 
@@ -227,6 +231,8 @@ func main() {
 	listen := flag.String("listen", "", "listen on this address.")
 	cpuFraction := flag.Float64("cpu_fraction", 0.25,
 		"use this fraction of the cores for indexing.")
+	debug := flag.Bool("debug", false,
+		"turn on more verbose logging.")
 	flag.Parse()
 
 	if *cpuFraction <= 0.0 || *cpuFraction > 1.0 {
@@ -264,6 +270,7 @@ func main() {
 		IndexDir: *index,
 		Interval: *interval,
 		CPUCount: cpuCount,
+		Debug:    *debug,
 	}
 
 	if *listen != "" {
