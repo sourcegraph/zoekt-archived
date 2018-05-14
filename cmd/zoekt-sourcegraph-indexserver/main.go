@@ -88,11 +88,24 @@ func (s *Server) Refresh() {
 		s.repos = repos
 		s.mu.Unlock()
 
-		start := time.Now()
+		var (
+			wg    sync.WaitGroup
+			sem   = make(chan int, s.CPUCount)
+			start = time.Now()
+		)
 		log.Printf("indexing %d repositories", len(repos))
 		for _, name := range repos {
-			s.Index(name)
+			sem <- 1
+			wg.Add(1)
+			go func(name string) {
+				defer func() {
+					<-sem
+					wg.Done()
+				}()
+				s.Index(name)
+			}(name)
 		}
+		wg.Wait()
 		log.Printf("indexed %d repositories after %s", len(repos), time.Since(start))
 
 		if len(repos) > 0 {
@@ -128,7 +141,7 @@ func (s *Server) Index(name string) error {
 	}
 
 	cmd := exec.Command("zoekt-archive-index",
-		fmt.Sprintf("-parallelism=%d", s.CPUCount),
+		"-parallelism=1",
 		"-index", s.IndexDir,
 		"-incremental",
 		"-branch", "HEAD",
