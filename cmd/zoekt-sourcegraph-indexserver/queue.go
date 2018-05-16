@@ -10,8 +10,8 @@ type queueItem struct {
 	repoName string
 	// indexedCommit is the last known indexed commit
 	indexedCommit string
-	// latestCommit is the latest commit available from gitserver. It is the commit
-	// want to index next. It can be the same as current.
+	// latestCommit is the latest commit available from gitserver. It is the
+	// commit want to index next. It can be the same as indexedCommit.
 	latestCommit string
 	// heapIdx is the index of the item in the heap. If < 0 then the item is
 	// not on the heap.
