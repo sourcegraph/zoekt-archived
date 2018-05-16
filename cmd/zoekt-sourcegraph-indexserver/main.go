@@ -69,8 +69,8 @@ func (s *Server) loggedRun(tr trace.Trace, cmd *exec.Cmd) error {
 	return nil
 }
 
-// Refresh is starts the sync loop. It blocks forever.
-func (s *Server) Refresh() {
+// Run the sync loop. This blocks forever.
+func (s *Server) Run() {
 	queue := &Queue{}
 
 	// Start a goroutine which updates the queue with commits to index.
@@ -399,5 +399,5 @@ func main() {
 		}()
 	}
 
-	s.Refresh()
+	s.Run()
 }
