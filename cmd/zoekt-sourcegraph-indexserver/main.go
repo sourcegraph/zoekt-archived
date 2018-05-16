@@ -107,24 +107,9 @@ func (s *Server) Run() {
 			sem.Wait()
 			tr.Finish()
 
-			<-t.C
-		}
-	}()
-
-	// Start a goroutine which deletes shards for repos which no longer exist
-	go func() {
-		t := time.NewTicker(s.Interval)
-		for {
-			repos, err := listRepos(s.Root)
-			if err != nil {
-				log.Println(err)
-				<-t.C
-				continue
-			}
-
+			// Only delete shards if we found repositories, to prevent strange
+			// bugs in responses causing us to delete everything.
 			if len(repos) > 0 {
-				// Only delete shards if we found repositories, to prevent strange
-				// bugs in responses causing us to delete everything.
 				exists := make(map[string]bool)
 				for _, name := range repos {
 					exists[name] = true
