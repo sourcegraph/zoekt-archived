@@ -118,13 +118,13 @@ func (pq pqueue) Len() int { return len(pq) }
 func (pq pqueue) Less(i, j int) bool {
 	// If we know a needs an update and b doesn't, then return true. Otherwise
 	// they are either equal priority or b is more urgent.
-	a := pq[i]
-	b := pq[j]
-	if (a.indexedCommit == a.latestCommit) == (b.indexedCommit == b.latestCommit) {
+	x := pq[i]
+	y := pq[j]
+	if (x.indexedCommit == x.latestCommit) == (y.indexedCommit == y.latestCommit) {
 		// tie breaker is to prefer the item added to the queue first
-		return a.seq < b.seq
+		return x.seq < y.seq
 	}
-	return a.indexedCommit != a.latestCommit
+	return x.indexedCommit != x.latestCommit
 }
 
 func (pq pqueue) Swap(i, j int) {
