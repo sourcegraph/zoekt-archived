@@ -7,8 +7,6 @@ import (
 )
 
 func TestQueue(t *testing.T) {
-	// Tests that the queue fallbacks to FIFO if everything has the same
-	// priority
 	queue := &Queue{}
 
 	for i := 0; i < 100; i++ {
