@@ -18,8 +18,9 @@ func TestSearchTypeRepo(t *testing.T) {
 		zoekt.Document{Name: "f2", Content: []byte("another file another needle")})
 
 	shard := searcherForTest(t, b)
-	searcher := newShardedSearcher(2)
-	searcher.replace("key", shard)
+	ss := newShardedSearcher(2)
+	ss.replace("key", shard)
+	searcher := &typeRepoSearcher{ss}
 
 	search := func(q query.Q, o ...zoekt.SearchOptions) *zoekt.SearchResult {
 		t.Helper()
