@@ -1080,6 +1080,34 @@ func TestListRepos(t *testing.T) {
 	}
 }
 
+func TestListReposByContent(t *testing.T) {
+	content := []byte("bla the needle")
+	// ----------------01234567890123
+	b := testIndexBuilder(t, &Repository{
+		Name: "reponame",
+	},
+		Document{Name: "f1", Content: content},
+		Document{Name: "f2", Content: content})
+
+	searcher := searcherForTest(t, b)
+	q := &query.Substring{Pattern: "needle"}
+	res, err := searcher.List(context.Background(), q)
+	if err != nil {
+		t.Fatalf("List(%v): %v", q, err)
+	}
+	if len(res.Repos) != 1 || res.Repos[0].Repository.Name != "reponame" {
+		t.Fatalf("got %v, want 1 matches", res)
+	}
+	q = &query.Substring{Pattern: "foo"}
+	res, err = searcher.List(context.Background(), q)
+	if err != nil {
+		t.Fatalf("List(%v): %v", q, err)
+	}
+	if len(res.Repos) != 0 {
+		t.Fatalf("got %v, want 0 matches", res)
+	}
+}
+
 func TestMetadata(t *testing.T) {
 	content := []byte("bla the needle")
 	// ----------------01234567890123
@@ -1842,4 +1870,52 @@ func TestCheckText(t *testing.T) {
 			t.Errorf("CheckText(%q) succeeded", text)
 		}
 	}
+}
+
+func TestSearchTypeFileName(t *testing.T) {
+	b := testIndexBuilder(t, &Repository{
+		Name: "reponame",
+	},
+		Document{Name: "f1", Content: []byte("bla the needle")},
+		Document{Name: "f2", Content: []byte("another file another\nneedle")})
+
+	wantSingleMatch := func(res *SearchResult, want string) {
+		t.Helper()
+		fmatches := res.Files
+		if len(fmatches) != 1 {
+			t.Errorf("got %v, want 1 matches", len(fmatches))
+			return
+		}
+		if len(fmatches[0].LineMatches) != 1 {
+			t.Errorf("got %d line matches", len(fmatches[0].LineMatches))
+			return
+		}
+		var got string
+		if fmatches[0].LineMatches[0].FileName {
+			got = fmatches[0].FileName
+		} else {
+			got = fmt.Sprintf("%s:%d", fmatches[0].FileName, fmatches[0].LineMatches[0].LineFragments[0].Offset)
+		}
+
+		if got != want {
+			t.Errorf("got %s, want %s", got, want)
+		}
+	}
+
+	// Only return the later match in the second file
+	res := searchForTest(t, b, query.NewAnd(
+		&query.Type{
+			Type:  query.TypeFileName,
+			Child: &query.Substring{Pattern: "needle"},
+		},
+		&query.Substring{Pattern: "file"}))
+	wantSingleMatch(res, "f2:8")
+
+	// Only return a filename result
+	res = searchForTest(t, b,
+		&query.Type{
+			Type:  query.TypeFileName,
+			Child: &query.Substring{Pattern: "file"},
+		})
+	wantSingleMatch(res, "f2")
 }
